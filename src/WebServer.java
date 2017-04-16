@@ -1,4 +1,5 @@
 import java.io.File;
+import java.nio.file.Files;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -58,7 +59,8 @@ public class WebServer {
   static class RenderHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange req) throws IOException {
-      String out = "Invalid Request";
+      String outError = "Invalid Request";
+      OutputStream os = req.getResponseBody();
       Map<String,String> queryParams = WebServer.getQueryParameters(req);
       Integer response = 400;
       try {
@@ -79,17 +81,22 @@ public class WebServer {
         rayTracer.draw(outFile);
 
         response = 200;
+        req.getResponseHeaders().set("Content-Type", "image/bmp");
+        req.sendResponseHeaders(response, outFile.length());
+        Files.copy(outFile.toPath(), os);
       } catch (NumberFormatException e) {
-        out = e.getMessage();
+        outError += e.getMessage();
         response = 400;
+        req.sendResponseHeaders(response, outError.length());
+        os.write(outError.getBytes());
       } catch (Exception e) {
-        out = e.getMessage();
+        outError = "Internal Server Error: " + e.getMessage();
         response = 500;
+        req.sendResponseHeaders(response, outError.length());
+        os.write(outError.getBytes());
+      } finally {
+        os.close();
       }
-      req.sendResponseHeaders(response, out.length());
-      OutputStream os = req.getResponseBody();
-      os.write(out.getBytes());
-      os.close();
     }
   }
 
