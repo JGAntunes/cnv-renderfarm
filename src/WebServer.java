@@ -1,3 +1,5 @@
+package renderfarm;
+
 import java.io.File;
 import java.nio.file.Files;
 import java.io.IOException;
@@ -19,9 +21,6 @@ public class WebServer {
   public static final String INPUT_FILES_DIR = "input";
   public static final String OUTPUT_FILES_DIR = "output";
 
-  public static final String RENDER_PATH = "/r.html";
-  public static final String HEALTHCHECK_PATH = "/healthcheck";
-  
   public static final String MODEL_FILENAME_PARAM = "f";
   public static final String SCENE_COLUMNS_PARAM = "sc";
   public static final String SCENE_ROWS_PARAM = "sr";
@@ -36,28 +35,14 @@ public class WebServer {
     // Let's bind to all the supported ipv4 interfaces
     HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", PORT), 0);
     // Set routes
-    server.createContext(RENDER_PATH, new RenderHandler());
-    server.createContext(HEALTHCHECK_PATH, new HealthcheckHandler());
+    server.createContext(WebUtils.RENDER_PATH, new RenderHandler());
+    server.createContext(WebUtils.HEALTHCHECK_PATH, new HealthcheckHandler());
     // Multi thread support
     server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
     server.start();
     System.out.println("Server running on port: " + PORT);
   }
 
-  public static Map<String, String> getQueryParameters(HttpExchange req) {
-    Map<String, String> result = new HashMap<String, String>();
-    String query = req.getRequestURI().getQuery();
-    if (query == null) return result;
-    for (String param : query.split("&")) {
-      String pair[] = param.split("=");
-      if (pair.length>1) {
-        result.put(pair[0], pair[1]);
-      }else{
-        result.put(pair[0], "");
-      }
-    }
-    return result;
-  }
 
   static class HealthcheckHandler implements HttpHandler {
     @Override
@@ -77,7 +62,7 @@ public class WebServer {
     public void handle(HttpExchange req) throws IOException {
       String outError = "Invalid Request";
       OutputStream os = req.getResponseBody();
-      Map<String,String> queryParams = WebServer.getQueryParameters(req);
+      Map<String,String> queryParams = WebUtils.getQueryParameters(req);
       Integer response = 400;
       try {
         int scols = Integer.parseInt(queryParams.get(SCENE_COLUMNS_PARAM));
