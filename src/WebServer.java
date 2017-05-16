@@ -19,7 +19,8 @@ public class WebServer {
   public static final String INPUT_FILES_DIR = "input";
   public static final String OUTPUT_FILES_DIR = "output";
 
-  public static final String ROUTE_PATH = "/r.html";
+  public static final String RENDER_PATH = "/r.html";
+  public static final String HEALTHCHECK_PATH = "/healthcheck";
   
   public static final String MODEL_FILENAME_PARAM = "f";
   public static final String SCENE_COLUMNS_PARAM = "sc";
@@ -34,7 +35,9 @@ public class WebServer {
   public static void main(String[] args) throws Exception {
     // Let's bind to all the supported ipv4 interfaces
     HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", PORT), 0);
-    server.createContext(ROUTE_PATH, new RenderHandler());
+    // Set routes
+    server.createContext(RENDER_PATH, new RenderHandler());
+    server.createContext(HEALTHCHECK_PATH, new HealthcheckHandler());
     // Multi thread support
     server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
     server.start();
@@ -56,6 +59,19 @@ public class WebServer {
     return result;
   }
 
+  static class HealthcheckHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange req) throws IOException {
+      String outResponse = "OK";
+      OutputStream os = req.getResponseBody();
+      Integer responseCode = 200;
+      req.sendResponseHeaders(responseCode, outResponse.length());
+      os.write(outResponse.getBytes());
+      os.close();
+    }
+  }
+     
+  
   static class RenderHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange req) throws IOException {
