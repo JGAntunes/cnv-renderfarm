@@ -19,12 +19,20 @@
     <javac srcdir="${lib}" destdir="${build}">
     </javac>
   </target>
-
   
-  <target name="compile" depends="compile-deps" description="compile the source">
+  <target name="copy-jars" depends="compile-deps" description="copy required jars">
+    <copy todir="${dist}">
+      <fileset dir="${lib}/AWS"/>
+    </copy>
+  </target>
+  
+  <target name="compile" depends="copy-jars" description="compile the source">
     <!-- Compile the java code from ${src} into ${build} -->
     <javac srcdir="${src}" destdir="${build}">
       <classpath>
+        <fileset dir="${dist}">
+          <include name="**/*.jar"/>
+        </fileset>
         <fileset dir="${build}">
           <include name="**/*.class"/>
         </fileset>
@@ -49,7 +57,7 @@
   <target name="run" depends="dist" description="run the web server">
     <java classname="renderfarm.WebServer" fork="true">
       <classpath>
-        <pathelement location="${dist}/${project-name}.jar"/>
+        <pathelement location="${dist}"/>
         <pathelement path="${java.class.path}"/>
       </classpath>
     </java> 
