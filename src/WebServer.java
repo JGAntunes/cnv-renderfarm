@@ -14,22 +14,27 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.ArrayList;
 
+import java.security.SecureRandom;
+import java.math.BigInteger;
+
 import raytracer.*;
 
 public class WebServer {
 
-  public static final String INPUT_FILES_DIR = "input";
-  public static final String OUTPUT_FILES_DIR = "output";
+  private static final String INPUT_FILES_DIR = "input";
+  private static final String OUTPUT_FILES_DIR = "output";
 
-  public static final String MODEL_FILENAME_PARAM = "f";
-  public static final String SCENE_COLUMNS_PARAM = "sc";
-  public static final String SCENE_ROWS_PARAM = "sr";
-  public static final String WINDOW_COLUMNS_PARAM = "wc";
-  public static final String WINDOW_ROWS_PARAM = "wr";
-  public static final String COLUMNS_OFFSET_PARAM = "coff";
-  public static final String ROWS_OFFSET_PARAM = "roff";
+  private static final String MODEL_FILENAME_PARAM = "f";
+  private static final String SCENE_COLUMNS_PARAM = "sc";
+  private static final String SCENE_ROWS_PARAM = "sr";
+  private static final String WINDOW_COLUMNS_PARAM = "wc";
+  private static final String WINDOW_ROWS_PARAM = "wr";
+  private static final String COLUMNS_OFFSET_PARAM = "coff";
+  private static final String ROWS_OFFSET_PARAM = "roff";
   
-  public static final Integer PORT = 8000;
+  private static final Integer PORT = 8000;
+
+  private static final SecureRandom random = new SecureRandom();
 
   public static void main(String[] args) throws Exception {
     // Let's bind to all the supported ipv4 interfaces
@@ -64,6 +69,8 @@ public class WebServer {
       OutputStream os = req.getResponseBody();
       Map<String,String> queryParams = WebUtils.getQueryParameters(req);
       Integer response = 400;
+      String outputFile = new BigInteger(130, random).toString(32);
+      File outFile = new File(OUTPUT_FILES_DIR + "/" + outputFile + ".bmp");
       try {
         int scols = Integer.parseInt(queryParams.get(SCENE_COLUMNS_PARAM));
         int srows = Integer.parseInt(queryParams.get(SCENE_ROWS_PARAM));
@@ -74,7 +81,6 @@ public class WebServer {
         
         String fileName = queryParams.get(MODEL_FILENAME_PARAM);
         File inFile = new File(INPUT_FILES_DIR + "/" + fileName);
-        File outFile = new File(OUTPUT_FILES_DIR + "/" + fileName + ".bmp");
         
         RayTracer rayTracer = new RayTracer(scols, srows, wcols, wrows, coff, roff);
 		    
@@ -97,6 +103,7 @@ public class WebServer {
         os.write(outError.getBytes());
       } finally {
         os.close();
+        Files.deleteIfExists(outFile.toPath());
       }
     }
   }
