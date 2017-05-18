@@ -55,11 +55,12 @@
   </target>
   
   <target name="run" depends="dist" description="run the web server">
-    <java classname="renderfarm.WebServer" fork="true">
+    <java classname="renderfarm.AWSUtils" fork="true">
       <classpath>
-        <pathelement location="${dist}"/>
-        <pathelement path="${java.class.path}"/>
-      </classpath>
+        <fileset dir="${dist}">
+          <include name="**/*.jar"/>
+        </fileset>
+     </classpath>
     </java> 
   </target>
 
