@@ -18,7 +18,7 @@ public class AWSUtils {
 
   private AWSUtils () {}
 
-  public static void getAvailableInstances () {
+  public static List<String> getAvailableInstances () {
 
     DescribeAutoScalingGroupsRequest groupsRequest = new DescribeAutoScalingGroupsRequest()
      .withAutoScalingGroupNames(AUTOSCALING_NAME);
@@ -27,11 +27,14 @@ public class AWSUtils {
      .getAutoScalingGroups();
 
     List<String> instanceIds = new ArrayList();
+    List<String> publicIps = new ArrayList();
 
     for (AutoScalingGroup group : groups) {
       List<com.amazonaws.services.autoscaling.model.Instance> instances = group.getInstances();
       for (com.amazonaws.services.autoscaling.model.Instance instance : instances) {
-        instanceIds.add(instance.getInstanceId());
+        if (instance.getHealthStatus().equals("Healthy")) {
+          instanceIds.add(instance.getInstanceId());
+        }       
       }
     }
     
@@ -39,19 +42,20 @@ public class AWSUtils {
     DescribeInstancesResult result = ec2Client.describeInstances(request);
     
     List<Reservation> reservations = result.getReservations();
-    
     for (Reservation reservation : reservations) {
       List<com.amazonaws.services.ec2.model.Instance> instances = reservation.getInstances();
 
       for (com.amazonaws.services.ec2.model.Instance instance : instances) {
-        System.out.println("Instance Public IP :" + instance.getPublicIpAddress());
-        System.out.println("Instance Public DNS :" + instance.getPublicDnsName());
-        System.out.println("Instance State :" + instance.getState()); 
+        if (instance.getState().getName().equals("running")) {
+          publicIps.add(instance.getPublicDnsName());
+        }
       }
     }
+
+    return publicIps;
   }
 
   public static void main(String[] args) {
-    getAvailableInstances();
+    System.out.println(getAvailableInstances().size());
   }
 }
