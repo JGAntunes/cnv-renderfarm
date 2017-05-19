@@ -7,7 +7,7 @@ ENV JAVA_HOME=/usr/lib/jvm/java-1.7-openjdk
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 ENV CLASSPATH="."
 
-EXPOSE 8000
+EXPOSE 80
 
 RUN apk --update add ${APK_PACKAGES}
 

@@ -32,7 +32,7 @@ public class WebServer {
   private static final String COLUMNS_OFFSET_PARAM = "coff";
   private static final String ROWS_OFFSET_PARAM = "roff";
   
-  private static final Integer PORT = 8000;
+  private static final Integer PORT = 80;
 
   private static final SecureRandom random = new SecureRandom();
 

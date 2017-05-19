@@ -55,7 +55,7 @@
   </target>
   
   <target name="run" depends="dist" description="run the web server">
-    <java classname="renderfarm.AWSUtils" fork="true">
+    <java classname="renderfarm.WebServer" fork="true">
       <classpath>
         <fileset dir="${dist}">
           <include name="**/*.jar"/>
