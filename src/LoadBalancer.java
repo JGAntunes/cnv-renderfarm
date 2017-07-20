@@ -17,7 +17,9 @@ import raytracer.*;
 
 public class LoadBalancer {
 
-  public static final Integer PORT = 80;
+  private static final Integer PORT = 80;
+
+  private static final Logger logger = new Logger("load-balancer");
 
   public static void main(String[] args) throws Exception {
     // Let's bind to all the supported ipv4 interfaces
@@ -28,7 +30,7 @@ public class LoadBalancer {
     // Multi thread support
     server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
     server.start();
-    System.out.println("Server running on port: " + PORT);
+    logger.log("Server running on port: " + PORT);
   }
 
   static String getInstance() {
@@ -52,12 +54,17 @@ public class LoadBalancer {
   static class RenderHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange req) throws IOException {
+      Timer requestTimer = new Timer();
+      Logger requestLogger = logger.getChild("render-handler");
       // Get the instance hostname to use
       String hostName = getInstance();
+      requestLogger.debug("Selected worker: " + hostName);
       // Assemble the URL
       String urlString = "http://" + hostName + req.getRequestURI();
       URL url = new URL(urlString);
       // Make the request
+      requestLogger.debug("Sending request: " + urlString);
+      Timer workerTimer = new Timer();
       HttpURLConnection conn = (HttpURLConnection) url.openConnection();
       conn.setRequestMethod("GET");
       conn.setConnectTimeout(50000); //set the timeout
@@ -66,6 +73,7 @@ public class LoadBalancer {
       InputStream is = conn.getInputStream();
       int contentLength = conn.getContentLength();
       int responseCode = conn.getResponseCode();
+      requestLogger.debug("Worker processed request in " + workerTimer.getTime() + "ms");
 
       OutputStream os = req.getResponseBody();
       req.sendResponseHeaders(responseCode, contentLength);
@@ -74,12 +82,14 @@ public class LoadBalancer {
       }
       catch (Exception e) {
         String outError = "Internal Server Error: " + e.getMessage();
+        requestLogger.error(outError);
         int response = 500;
         req.sendResponseHeaders(response, outError.length());
         os.write(outError.getBytes());
       } finally {
         is.close();
         os.close();
+        requestLogger.debug("Request done in " + requestTimer.getTime() + "ms");
       }
     }
   }
