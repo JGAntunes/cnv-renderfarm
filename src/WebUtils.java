@@ -2,16 +2,18 @@ package renderfarm;
 
 import com.sun.net.httpserver.HttpExchange;
 
+import java.io.*;
+
 import java.util.Map;
 import java.util.HashMap;
 import java.util.ArrayList;
 
 public class WebUtils {
-  
+
   private WebUtils () {}
 
   public static final String RENDER_PATH = "/r.html";
-  public static final String HEALTHCHECK_PATH = "/healthcheck"; 
+  public static final String HEALTHCHECK_PATH = "/healthcheck";
 
   public static Map<String, String> getQueryParameters(HttpExchange req) {
     Map<String, String> result = new HashMap<String, String>();
@@ -26,5 +28,11 @@ public class WebUtils {
       }
     }
     return result;
+  }
+
+  public static void pipe(InputStream in, OutputStream out) throws IOException {
+    byte[] buffer = new byte[1024];
+    for (int n = in.read(buffer); n >= 0; n = in.read(buffer))
+        out.write(buffer, 0, n);
   }
 }
