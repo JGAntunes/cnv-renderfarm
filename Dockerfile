@@ -15,4 +15,4 @@ COPY . .
 
 RUN ant dist
 
-CMD ["ant", "run-webserver"]
+CMD ["ant", "run-autoscaler"]
