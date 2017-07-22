@@ -1,5 +1,7 @@
 package renderfarm;
 
+import java.util.concurrent.*;
+
 public class Logger {
 
   String scope;
@@ -7,11 +9,16 @@ public class Logger {
 
   public Logger(String scope) {
     this.scope = scope;
-    this.formatString = "[%s] (%s) - %s";
+    this.formatString = "[%s] (Thread - %d) (%s) - %s";
   }
 
   private void write(String level, String msg) {
-    System.out.println(String.format(this.formatString, level, this.scope, msg));
+    System.out.println(String.format(this.formatString,
+      level,
+      Thread.currentThread().getId(),
+      this.scope,
+      msg
+    ));
   }
 
   public Logger getChild(String scope) {
