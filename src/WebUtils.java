@@ -35,4 +35,11 @@ public class WebUtils {
     for (int n = in.read(buffer); n >= 0; n = in.read(buffer))
         out.write(buffer, 0, n);
   }
+
+  public static void simpleReply(HttpExchange request, int code, String message) throws IOException {
+    OutputStream os = request.getResponseBody();
+    request.sendResponseHeaders(code, message.length());
+    os.write(message.getBytes());
+    os.close();
+  }
 }

@@ -23,15 +23,6 @@ public class WebServer {
 
   private static final String INPUT_FILES_DIR = "input";
   private static final String OUTPUT_FILES_DIR = "output";
-
-  private static final String MODEL_FILENAME_PARAM = "f";
-  private static final String SCENE_COLUMNS_PARAM = "sc";
-  private static final String SCENE_ROWS_PARAM = "sr";
-  private static final String WINDOW_COLUMNS_PARAM = "wc";
-  private static final String WINDOW_ROWS_PARAM = "wr";
-  private static final String COLUMNS_OFFSET_PARAM = "coff";
-  private static final String ROWS_OFFSET_PARAM = "roff";
-  
   private static final Integer PORT = 80;
 
   private static final SecureRandom random = new SecureRandom();
@@ -52,55 +43,46 @@ public class WebServer {
   static class HealthcheckHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange req) throws IOException {
-      String outResponse = "OK";
-      OutputStream os = req.getResponseBody();
-      Integer responseCode = 200;
-      req.sendResponseHeaders(responseCode, outResponse.length());
-      os.write(outResponse.getBytes());
-      os.close();
+      WebUtils.simpleReply(req, 200, "OK");
     }
   }
-     
-  
+
+
   static class RenderHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange req) throws IOException {
       String outError = "Invalid Request";
       OutputStream os = req.getResponseBody();
       Map<String,String> queryParams = WebUtils.getQueryParameters(req);
-      Integer response = 400;
       String outputFile = new BigInteger(130, random).toString(32);
       File outFile = new File(OUTPUT_FILES_DIR + "/" + outputFile + ".bmp");
+
       try {
-        int scols = Integer.parseInt(queryParams.get(SCENE_COLUMNS_PARAM));
-        int srows = Integer.parseInt(queryParams.get(SCENE_ROWS_PARAM));
-	      int wcols = Integer.parseInt(queryParams.get(WINDOW_COLUMNS_PARAM));
-        int wrows = Integer.parseInt(queryParams.get(WINDOW_ROWS_PARAM));
-        int coff = Integer.parseInt(queryParams.get(COLUMNS_OFFSET_PARAM));
-        int roff = - Integer.parseInt(queryParams.get(ROWS_OFFSET_PARAM));
-        
-        String fileName = queryParams.get(MODEL_FILENAME_PARAM);
-        File inFile = new File(INPUT_FILES_DIR + "/" + fileName);
-        
-        RayTracer rayTracer = new RayTracer(scols, srows, wcols, wrows, coff, roff);
-		    
+        RayTracerRequest parsedRequest = new RayTracerRequest(queryParams);
+        File inFile = new File(INPUT_FILES_DIR + "/" + parsedRequest.getFileName());
+
+        RayTracer rayTracer = new RayTracer(
+          parsedRequest.getSceneColumns(),
+          parsedRequest.getSceneRows(),
+          parsedRequest.getWindowColumns(),
+          parsedRequest.getWindowRows(),
+          parsedRequest.getColumnsOffset(),
+          parsedRequest.getRowsOffset()
+        );
+
         rayTracer.readScene(inFile);
         rayTracer.draw(outFile);
 
-        response = 200;
+        int response = 200;
         req.getResponseHeaders().set("Content-Type", "image/bmp");
         req.sendResponseHeaders(response, outFile.length());
         Files.copy(outFile.toPath(), os);
       } catch (NumberFormatException e) {
         outError += e.getMessage();
-        response = 400;
-        req.sendResponseHeaders(response, outError.length());
-        os.write(outError.getBytes());
+        WebUtils.simpleReply(req, 400, outError);
       } catch (Exception e) {
         outError = "Internal Server Error: " + e.getMessage();
-        response = 500;
-        req.sendResponseHeaders(response, outError.length());
-        os.write(outError.getBytes());
+        WebUtils.simpleReply(req, 500, outError);
       } finally {
         os.close();
         Files.deleteIfExists(outFile.toPath());

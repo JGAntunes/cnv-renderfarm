@@ -3,23 +3,19 @@ package renderfarm;
 import java.nio.file.Files;
 import java.io.*;
 import java.net.*;
+import java.util.*;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
-
-import java.util.Map;
-import java.util.List;
-import java.util.HashMap;
-import java.util.ArrayList;
 
 import raytracer.*;
 
 public class LoadBalancer {
 
   private static final Integer PORT = 80;
-
   private static final Logger logger = new Logger("load-balancer");
+  private static final Scheduler scheduler = new Scheduler(new RoundRobinStrategy());
 
   public static void main(String[] args) throws Exception {
     // Let's bind to all the supported ipv4 interfaces
@@ -33,31 +29,33 @@ public class LoadBalancer {
     logger.log("Server running on port: " + PORT);
   }
 
-  static String getInstance() {
-    List<String> availableInstances = AWSUtils.getAvailableInstances();
-    return availableInstances.get(0);
-  }
-
-  static class HealthcheckHandler implements HttpHandler {
+  private static class HealthcheckHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange req) throws IOException {
-      String outResponse = "OK";
-      OutputStream os = req.getResponseBody();
-      Integer responseCode = 200;
-      req.sendResponseHeaders(responseCode, outResponse.length());
-      os.write(outResponse.getBytes());
-      os.close();
+      WebUtils.simpleReply(req, 200, "OK");
     }
   }
 
 
-  static class RenderHandler implements HttpHandler {
+  private static class RenderHandler implements HttpHandler {
+    private static final Logger requestLogger = logger.getChild("render-handler");
+
     @Override
     public void handle(HttpExchange req) throws IOException {
       Timer requestTimer = new Timer();
-      Logger requestLogger = logger.getChild("render-handler");
+
+      // Parse the request fields
+      Map<String,String> queryParams = WebUtils.getQueryParameters(req);
+      RayTracerRequest parsedRequest = new RayTracerRequest(queryParams);
       // Get the instance hostname to use
-      String hostName = getInstance();
+      String hostName;
+      try {
+        hostName = scheduler.schedule(parsedRequest);
+      } catch(NoAvailableInstancesException e) {
+        requestLogger.error("No available workers, terminating request");
+        WebUtils.simpleReply(req, 500, "No available workers");
+        return;
+      }
       requestLogger.debug("Selected worker: " + hostName);
       // Assemble the URL
       String urlString = "http://" + hostName + req.getRequestURI();
@@ -83,9 +81,7 @@ public class LoadBalancer {
       catch (Exception e) {
         String outError = "Internal Server Error: " + e.getMessage();
         requestLogger.error(outError);
-        int response = 500;
-        req.sendResponseHeaders(response, outError.length());
-        os.write(outError.getBytes());
+        WebUtils.simpleReply(req, 500, outError);
       } finally {
         is.close();
         os.close();
