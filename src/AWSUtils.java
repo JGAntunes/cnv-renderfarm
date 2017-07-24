@@ -5,22 +5,18 @@ import com.amazonaws.services.autoscaling.model.*;
 import com.amazonaws.services.ec2.*;
 import com.amazonaws.services.ec2.model.*;
 
-import java.util.Map;
-import java.util.HashMap;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Iterator;
+import java.util.*;
 
 public class AWSUtils {
 
   public static final String AUTOSCALING_NAME = "asg-renderfarm";
 
-  public static final AmazonAutoScaling autoscalingClient = new AmazonAutoScalingClient();
+  public static final AmazonAutoScaling autoscalingClient = AmazonAutoScalingClientBuilder.defaultClient();
   public static final AmazonEC2 ec2Client = AmazonEC2ClientBuilder.defaultClient();
 
   private AWSUtils () {}
 
-  public static List<String> getAvailableInstances () {
+  public static Map<String, EC2Instance> getAvailableInstances () {
 
     // Get autoscaling group
     DescribeAutoScalingGroupsRequest groupsRequest = new DescribeAutoScalingGroupsRequest()
@@ -30,7 +26,8 @@ public class AWSUtils {
      .getAutoScalingGroups();
 
     List<String> instanceIds = new ArrayList();
-    List<String> publicIps = new ArrayList();
+    Map<String, EC2Instance> availableInstances = new HashMap();
+    Map<String, com.amazonaws.services.autoscaling.model.Instance> autoscalingInstances = new HashMap();
 
     // Iterate through instances and get those that are healthy
     for (AutoScalingGroup group : groups) {
@@ -38,6 +35,7 @@ public class AWSUtils {
       for (com.amazonaws.services.autoscaling.model.Instance instance : instances) {
         if (instance.getHealthStatus().equals("Healthy")) {
           instanceIds.add(instance.getInstanceId());
+          autoscalingInstances.put(instance.getInstanceId(), instance);
         }
       }
     }
@@ -53,14 +51,22 @@ public class AWSUtils {
 
       for (com.amazonaws.services.ec2.model.Instance instance : instances) {
         if (instance.getState().getName().equals("running")) {
-          publicIps.add(instance.getPublicDnsName());
+          availableInstances.put(instance.getInstanceId(), new EC2Instance(instance));
         }
       }
     }
 
-    return publicIps;
+    return availableInstances;
   }
 
+  public static void setHealthStatus(String instanceId, String status) {
+    SetInstanceHealthRequest request = new SetInstanceHealthRequest()
+      .withHealthStatus(status)
+      .withInstanceId(instanceId);
+    SetInstanceHealthResult response = autoscalingClient.setInstanceHealth(request);
+  }
+
+  // DEBUG
   public static void main(String[] args) {
     System.out.println(getAvailableInstances().size());
   }

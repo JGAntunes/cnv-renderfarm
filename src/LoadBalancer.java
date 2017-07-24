@@ -58,15 +58,11 @@ public class LoadBalancer {
       }
       requestLogger.debug("Selected worker: " + hostName);
       // Assemble the URL
-      String urlString = "http://" + hostName + req.getRequestURI();
-      URL url = new URL(urlString);
+      String url = "http://" + hostName + req.getRequestURI();
       // Make the request
-      requestLogger.debug("Sending request: " + urlString);
+      requestLogger.debug("Sending request: " + url);
       Timer workerTimer = new Timer();
-      HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-      conn.setRequestMethod("GET");
-      conn.setConnectTimeout(50000); //set the timeout
-      conn.connect();
+      HttpURLConnection conn = WebUtils.request("GET", url, 5000);
 
       InputStream is = conn.getInputStream();
       int contentLength = conn.getContentLength();

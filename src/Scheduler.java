@@ -8,13 +8,13 @@ public class Scheduler {
   private static final int MAX_RETRIES = 3;
   private static final Logger logger = new Logger("scheduler");
 
-  private List<String> availableInstances;
+  private ConcurrentHashMap<String, EC2Instance> availableInstances;
   private Thread pollingThread;
   private ScheduleStrategy strategy;
   private int currentRetries;
 
   public Scheduler(ScheduleStrategy strategy) {
-    this.availableInstances = new ArrayList<String>();
+    this.availableInstances = new ConcurrentHashMap<String, EC2Instance>();
     Poller poller = new Poller();
     this.pollingThread = new Thread(poller);
     this.pollingThread.start();
@@ -24,7 +24,7 @@ public class Scheduler {
   public String schedule(RayTracerRequest request) throws NoAvailableInstancesException {
     String instance;
     try {
-      instance = strategy.execute(request, this.availableInstances);
+      instance = strategy.execute(request, new ArrayList<EC2Instance>(this.availableInstances.values()));
     } catch (NoAvailableInstancesException e) {
       if (this.currentRetries > MAX_RETRIES) {
         throw e;
@@ -38,12 +38,25 @@ public class Scheduler {
   }
 
   public void updateInstances() {
-    List<String> instances = AWSUtils.getAvailableInstances();
-    logger.debug("Got a total of " + instances.size() + " instances available");
-    for(String instance : instances) {
-      logger.debug(instance);
+    Map<String, EC2Instance> newInstances = AWSUtils.getAvailableInstances();
+    logger.debug("Got a total of " + newInstances.size() + " instances available");
+    // Clean and disable monitoring on the old instances
+    for (Map.Entry<String, EC2Instance> entry : availableInstances.entrySet()) {
+      String instanceId = entry.getKey();
+      EC2Instance oldInstance = entry.getValue();
+      EC2Instance newInstance = newInstances.get(instanceId);
+      if (newInstance == null) {
+        oldInstance.monitor(false);
+        availableInstances.remove(instanceId);
+      }
     }
-    availableInstances = instances;
+    // Set and initialize monitoring in the new instances
+    for (Map.Entry<String, EC2Instance> entry : newInstances.entrySet()) {
+      String instanceId = entry.getKey();
+      EC2Instance newInstance = entry.getValue();
+      availableInstances.putIfAbsent(instanceId, newInstance);
+      availableInstances.get(instanceId).monitor(true);
+    }
   }
 
   public class Poller implements Runnable {

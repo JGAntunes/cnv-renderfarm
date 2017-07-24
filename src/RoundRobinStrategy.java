@@ -11,7 +11,7 @@ public class RoundRobinStrategy implements ScheduleStrategy {
   }
 
   @Override
-  public String execute(RayTracerRequest request, List<String> availableInstances) throws NoAvailableInstancesException {
+  public String execute(RayTracerRequest request, List<EC2Instance> availableInstances) throws NoAvailableInstancesException {
     logger.debug("Executing round robin strategy");
     if (this.currentIndex >= availableInstances.size()) {
       this.currentIndex = 0;
@@ -19,7 +19,7 @@ public class RoundRobinStrategy implements ScheduleStrategy {
     if (availableInstances.size() == 0) {
       throw new NoAvailableInstancesException();
     }
-    String instance = availableInstances.get(this.currentIndex);
+    String instance = availableInstances.get(this.currentIndex).getPublicDnsName();
     this.currentIndex++;
     return instance;
   }

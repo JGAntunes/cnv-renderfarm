@@ -3,10 +3,8 @@ package renderfarm;
 import com.sun.net.httpserver.HttpExchange;
 
 import java.io.*;
-
-import java.util.Map;
-import java.util.HashMap;
-import java.util.ArrayList;
+import java.net.*;
+import java.util.*;
 
 public class WebUtils {
 
@@ -41,5 +39,15 @@ public class WebUtils {
     request.sendResponseHeaders(code, message.length());
     os.write(message.getBytes());
     os.close();
+  }
+
+  public static HttpURLConnection request(String method, String urlString, int timeout) throws IOException {
+    URL url = new URL(urlString);
+    // Make the request
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    conn.setRequestMethod(method);
+    conn.setConnectTimeout(timeout); //set the timeout
+    conn.connect();
+    return conn;
   }
 }
