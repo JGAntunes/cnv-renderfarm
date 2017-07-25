@@ -11,7 +11,6 @@ public class Scheduler {
   private ConcurrentHashMap<String, EC2Instance> availableInstances;
   private Thread pollingThread;
   private ScheduleStrategy strategy;
-  private int currentRetries;
 
   public Scheduler(ScheduleStrategy strategy) {
     this.availableInstances = new ConcurrentHashMap<String, EC2Instance>();
@@ -22,19 +21,17 @@ public class Scheduler {
   }
 
   public String schedule(RayTracerRequest request) throws NoAvailableInstancesException {
-    String instance;
-    try {
-      instance = strategy.execute(request, new ArrayList<EC2Instance>(this.availableInstances.values()));
-    } catch (NoAvailableInstancesException e) {
-      if (this.currentRetries > MAX_RETRIES) {
-        throw e;
+    // Try to schedule
+    for (int i = 0; i < MAX_RETRIES; i++) {
+      try {
+        String instanceUrl = strategy.execute(request, new ArrayList<EC2Instance>(this.availableInstances.values()));
+        return instanceUrl;
+      } catch (NoAvailableInstancesException e) {
+        this.updateInstances();
       }
-      this.currentRetries++;
-      this.updateInstances();
-      return this.schedule(request);
     }
-    this.currentRetries = 0;
-    return instance;
+    // Fail case, throw error
+    throw new NoAvailableInstancesException();
   }
 
   public void updateInstances() {
@@ -50,7 +47,7 @@ public class Scheduler {
         availableInstances.remove(instanceId);
       }
     }
-    // Set and initialize monitoring in the new instances
+    // Set and initialize monitoring in the new instannce
     for (Map.Entry<String, EC2Instance> entry : newInstances.entrySet()) {
       String instanceId = entry.getKey();
       EC2Instance newInstance = entry.getValue();
