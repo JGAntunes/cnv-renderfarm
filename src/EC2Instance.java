@@ -9,6 +9,7 @@ import com.amazonaws.services.autoscaling.model.*;
 
 public class EC2Instance {
 
+  private static final int MAX_RETRIES = 3;
   private static final Logger classLogger = new Logger("ec2-instance");
 
   private Logger logger;
@@ -95,22 +96,26 @@ public class EC2Instance {
 
   private void runHealthCheck () {
     String url = "http://" + this.publicDnsName + WebUtils.HEALTHCHECK_PATH;
-    try {
-      HttpURLConnection conn = WebUtils.request("GET", url, 800);
-      int responseCode = conn.getResponseCode();
-      if (responseCode == 200) {
-        setHealthStatus(true);
-      } else {
-        logger.debug("Healthcheck returned " + responseCode);
-        logger.debug("Instance flagged as unhealthy");
-        setHealthStatus(false);
+    int currentRetries = 0;
+    for(int i = 0; i < MAX_RETRIES; i++) {
+      try {
+        HttpURLConnection conn = WebUtils.request("GET", url, 1000);
+        int responseCode = conn.getResponseCode();
+        if (responseCode == 200) {
+          setHealthStatus(true);
+        } else {
+          logger.debug("Healthcheck returned " + responseCode);
+          logger.debug("Instance flagged as unhealthy");
+          setHealthStatus(false);
+        }
+        return;
+      } catch (Exception e) {
+        logger.debug("Healthcheck endpoint inaccessible - " + e.getMessage() + " - retry" + currentRetries);
       }
-    } catch (Exception e) {
-      logger.debug("Healthcheck endpoint inaccessible " + e.getMessage());
-      logger.debug("Instance flagged as unhealthy");
-      setHealthStatus(false);
     }
-
+    // Nothing to do but to set the instance as unealthy
+    logger.debug("Instance flagged as unhealthy");
+    setHealthStatus(false);
   }
 
   @Override
