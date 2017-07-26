@@ -21,6 +21,7 @@ public class EC2Instance {
   private Date launchTime;
   private Thread pollingThread;
   private boolean isHealthy;
+  private boolean isAvailable;
   private ConcurrentLinkedQueue<RayTracerRequest> inFlightRequests;
 
   public EC2Instance(com.amazonaws.services.ec2.model.Instance ec2Instance) {
@@ -51,6 +52,14 @@ public class EC2Instance {
 
   public boolean isHealthy() {
     return isHealthy;
+  }
+
+  public void setAvailable(boolean availability) {
+    this.isAvailable = availability;
+  }
+
+  public boolean isAvailable() {
+    return isAvailable;
   }
 
   public AbstractQueue getInFlightRequests() {
