@@ -1,5 +1,6 @@
 package renderfarm;
 
+import java.io.IOException;
 import java.util.concurrent.*;
 import java.util.*;
 
@@ -7,6 +8,7 @@ public class Scheduler {
 
   private static final int MAX_RETRIES = 3;
   private static final Logger logger = new Logger("scheduler");
+  private static final RequestCache requestCache = new RequestCache();
 
   private ConcurrentHashMap<String, EC2Instance> availableInstances;
   private Thread pollingThread;
@@ -20,13 +22,16 @@ public class Scheduler {
     this.strategy = strategy;
   }
 
-  public String schedule(RayTracerRequest request) throws NoAvailableInstancesException {
+  // FIXME IOException needs to be handled here or on the EC2Instance
+  public RayTracerResponse schedule(RayTracerRequest request) throws NoAvailableInstancesException, IOException {
     // Try to schedule
     for (int i = 0; i < MAX_RETRIES; i++) {
       try {
-        String instanceUrl = strategy.execute(request, new ArrayList<EC2Instance>(this.availableInstances.values()));
-        return instanceUrl;
+        EC2Instance instance = strategy.execute(request, new ArrayList<EC2Instance>(this.availableInstances.values()), requestCache);
+        return instance.processRequest(request);
       } catch (NoAvailableInstancesException e) {
+        logger.warning("Unable to process request " + request.getId() + " " + e.getMessage());
+        logger.warning("Retry " + i);
         this.updateInstances();
       }
     }

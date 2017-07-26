@@ -53,12 +53,11 @@ public class WebServer {
     public void handle(HttpExchange req) throws IOException {
       String outError = "Invalid Request";
       OutputStream os = req.getResponseBody();
-      Map<String,String> queryParams = WebUtils.getQueryParameters(req);
       String outputFile = new BigInteger(130, random).toString(32);
       File outFile = new File(OUTPUT_FILES_DIR + "/" + outputFile + ".bmp");
 
       try {
-        RayTracerRequest parsedRequest = new RayTracerRequest(queryParams);
+        RayTracerRequest parsedRequest = new RayTracerRequest(req);
         File inFile = new File(INPUT_FILES_DIR + "/" + parsedRequest.getFileName());
 
         RayTracer rayTracer = new RayTracer(

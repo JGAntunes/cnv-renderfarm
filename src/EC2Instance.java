@@ -1,7 +1,9 @@
 package renderfarm;
 
+import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.Date;
+import java.util.AbstractQueue;
 import java.util.concurrent.*;
 
 import com.amazonaws.services.ec2.model.*;
@@ -19,8 +21,10 @@ public class EC2Instance {
   private Date launchTime;
   private Thread pollingThread;
   private boolean isHealthy;
+  private ConcurrentLinkedQueue<RayTracerRequest> inFlightRequests;
 
   public EC2Instance(com.amazonaws.services.ec2.model.Instance ec2Instance) {
+    this.inFlightRequests = new ConcurrentLinkedQueue();
     this.isHealthy = true;
     this.id = ec2Instance.getInstanceId();
     this.publicDnsName = ec2Instance.getPublicDnsName();
@@ -49,19 +53,8 @@ public class EC2Instance {
     return isHealthy;
   }
 
-  public void setHealthStatus(boolean status) {
-    String healthStatus = status ? "Healthy" : "Unhealthy";
-    if (this.isHealthy == status) {
-      return;
-    }
-    this.isHealthy = status;
-    // Ensure proper clean up of the poller
-    if (!status) {
-      stopPoller();
-    } else {
-      startPoller();
-    }
-    AWSUtils.setHealthStatus(this.id, healthStatus);
+  public AbstractQueue getInFlightRequests() {
+    return inFlightRequests;
   }
 
   // Start/stop the poller
@@ -77,8 +70,50 @@ public class EC2Instance {
     }
   }
 
+  public RayTracerResponse processRequest(RayTracerRequest request) throws IOException {
+    // Register inflight request
+    this.inFlightRequests.add(request);
+    Logger requestLogger = logger.getChild("req-id: " + request.getId());
+    requestLogger.debug("Selected worker: " + this.publicDnsName);
+    logger.debug("Current request load: " + this.inFlightRequests.size());
+    // Assemble the URL
+    String url = "http://" + this.publicDnsName + request.getPath();
+    // Make the request
+    requestLogger.debug("Sending request: " + url);
+    Timer workerTimer = new Timer();
+    HttpURLConnection conn = WebUtils.request("GET", url, 5000);
+
+    RayTracerResponse response = new RayTracerResponse(conn);
+    long finishTime = workerTimer.getTime();
+    request.done(finishTime);
+    requestLogger.debug("Worker processed request in " + finishTime + "ms");
+    // Deregister request
+    this.inFlightRequests.remove(request);
+    logger.debug("Remaining request load: " + this.inFlightRequests.size());
+    // Reply
+    return response;
+  }
+
+  private void setHealthStatus(boolean status) {
+    String healthStatus = status ? "Healthy" : "Unhealthy";
+    if (this.isHealthy == status) {
+      return;
+    }
+    this.isHealthy = status;
+    // Ensure proper clean up of the poller
+    if (!status) {
+      stopPoller();
+    } else {
+      startPoller();
+    }
+    AWSUtils.setHealthStatus(this.id, healthStatus);
+  }
+
   private void startPoller () {
     Poller poller = new Poller();
+    if (this.pollingThread != null) {
+      stopPoller();
+    }
     this.pollingThread = new Thread(poller);
     this.pollingThread.start();
   }
@@ -104,17 +139,17 @@ public class EC2Instance {
         if (responseCode == 200) {
           setHealthStatus(true);
         } else {
-          logger.debug("Healthcheck returned " + responseCode);
-          logger.debug("Instance flagged as unhealthy");
+          logger.warning("Healthcheck returned " + responseCode);
+          logger.warning("Instance flagged as unhealthy");
           setHealthStatus(false);
         }
         return;
       } catch (Exception e) {
-        logger.debug("Healthcheck endpoint inaccessible - " + e.getMessage() + " - retry" + currentRetries);
+        logger.warning("Healthcheck endpoint inaccessible - " + e.getMessage() + " - retry" + currentRetries);
       }
     }
     // Nothing to do but to set the instance as unealthy
-    logger.debug("Instance flagged as unhealthy");
+    logger.warning("Instance flagged as unhealthy");
     setHealthStatus(false);
   }
 

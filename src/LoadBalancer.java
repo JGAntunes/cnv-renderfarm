@@ -38,36 +38,29 @@ public class LoadBalancer {
 
 
   private static class RenderHandler implements HttpHandler {
-    private static final Logger requestLogger = logger.getChild("render-handler");
+    private static final Logger handlerLogger = logger.getChild("render-handler");
 
     @Override
     public void handle(HttpExchange req) throws IOException {
       Timer requestTimer = new Timer();
 
       // Parse the request fields
-      Map<String,String> queryParams = WebUtils.getQueryParameters(req);
-      RayTracerRequest parsedRequest = new RayTracerRequest(queryParams);
+      RayTracerRequest request = new RayTracerRequest(req);
+      Logger requestLogger = handlerLogger.getChild("req-id: " + request.getId());
+      requestLogger.debug("Got request " + request.getPath());
       // Get the instance hostname to use
-      String hostName;
+      RayTracerResponse response;
       try {
-        hostName = scheduler.schedule(parsedRequest);
+        response = scheduler.schedule(request);
       } catch(NoAvailableInstancesException e) {
         requestLogger.error("No available workers, terminating request");
         WebUtils.simpleReply(req, 500, "No available workers");
         return;
       }
-      requestLogger.debug("Selected worker: " + hostName);
-      // Assemble the URL
-      String url = "http://" + hostName + req.getRequestURI();
-      // Make the request
-      requestLogger.debug("Sending request: " + url);
-      Timer workerTimer = new Timer();
-      HttpURLConnection conn = WebUtils.request("GET", url, 5000);
 
-      InputStream is = conn.getInputStream();
-      int contentLength = conn.getContentLength();
-      int responseCode = conn.getResponseCode();
-      requestLogger.debug("Worker processed request in " + workerTimer.getTime() + "ms");
+      InputStream is = response.getInputStream();
+      int contentLength = response.getContentLength();
+      int responseCode = response.getResponseCode();
 
       OutputStream os = req.getResponseBody();
       req.sendResponseHeaders(responseCode, contentLength);
