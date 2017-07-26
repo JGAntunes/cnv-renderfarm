@@ -4,14 +4,17 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.Date;
 import java.util.AbstractQueue;
+import java.util.LinkedList;
 import java.util.concurrent.*;
 
 import com.amazonaws.services.ec2.model.*;
 import com.amazonaws.services.autoscaling.model.*;
+import com.amazonaws.services.cloudwatch.model.Datapoint;
 
 public class EC2Instance {
 
   private static final int MAX_RETRIES = 3;
+  private static final int RECORD_SIZE = 10;
   private static final Logger classLogger = new Logger("ec2-instance");
 
   private Logger logger;
@@ -22,11 +25,14 @@ public class EC2Instance {
   private Thread pollingThread;
   private boolean isHealthy;
   private boolean isAvailable;
+  private LinkedList<Datapoint> metrics;
   private ConcurrentLinkedQueue<RayTracerRequest> inFlightRequests;
 
   public EC2Instance(com.amazonaws.services.ec2.model.Instance ec2Instance) {
     this.inFlightRequests = new ConcurrentLinkedQueue();
     this.isHealthy = true;
+    this.isAvailable = true;
+    this.metrics = new LinkedList<Datapoint>();
     this.id = ec2Instance.getInstanceId();
     this.publicDnsName = ec2Instance.getPublicDnsName();
     this.type = ec2Instance.getInstanceType();
@@ -56,6 +62,21 @@ public class EC2Instance {
 
   public void setAvailable(boolean availability) {
     this.isAvailable = availability;
+  }
+
+  public void addMetric(Datapoint dp) {
+    if (metrics.size() >= RECORD_SIZE) {
+      metrics.removeLast();
+    }
+    metrics.addFirst(dp);
+  }
+
+  public Datapoint getMetric() {
+    metrics.getFirst();
+  }
+
+  public Datapoint getMetric(int index) {
+    metrics.get(index);
   }
 
   public boolean isAvailable() {
