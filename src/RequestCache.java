@@ -1,5 +1,6 @@
 package renderfarm;
 
+import java.util.*;
 import java.util.concurrent.*;
 
 public class RequestCache {
@@ -14,15 +15,15 @@ public class RequestCache {
     return map.size();
   }
 
-  public CachedValue get(RayTracerRequest request) {
+  public Integer get(RayTracerRequest request) {
     if (this.map.size() == 0) {
       return null;
     }
     Map.Entry<Integer, CachedValue> closer = this.map.ceilingEntry(calculateKey(request));
-    if (closer == null){ 
+    if (closer == null){
       closer = this.map.floorEntry(calculateKey(request));
-    } 
-    return closer.getValue();
+    }
+    return closer.getValue().getTime();
   }
 
   public void put(RayTracerRequest request, int time) {
