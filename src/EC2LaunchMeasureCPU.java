@@ -49,9 +49,9 @@ public class EC2LaunchMeasureCPU {
           "location (~/.aws/credentials), and is in valid format.",
           e);
     }
-    ec2 = AmazonEC2ClientBuilder.standard().withRegion("eu-west-1").withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
+    ec2 = AmazonEC2ClientBuilder.standard().withRegion("eu-west-1").build();
 
-    cloudWatch = AmazonCloudWatchClientBuilder.standard().withRegion("eu-west-1").withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
+    cloudWatch = AmazonCloudWatchClientBuilder.standard().withRegion("eu-west-1").build();
   }
 
   private static void startNewInstance() throws Exception {
@@ -90,7 +90,7 @@ public class EC2LaunchMeasureCPU {
         for (Instance instance : instances) {
           String name = instance.getInstanceId();
           String state = instance.getState().getName();
-          if (!state.equals("running")) { 
+j         if (!state.equals("running")) { 
 
             // TODO
             // remove from healthy pool if there

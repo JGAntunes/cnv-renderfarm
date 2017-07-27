@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.Date;
 import java.util.AbstractQueue;
-import java.util.LinkedList;
 import java.util.concurrent.*;
 
 import com.amazonaws.services.ec2.model.*;
@@ -23,16 +22,14 @@ public class EC2Instance {
   private String type;
   private Date launchTime;
   private Thread pollingThread;
-  private boolean isHealthy;
-  private boolean isAvailable;
-  private LinkedList<Datapoint> metrics;
+  private AtomicInteger credit;
+  private CopyOnWriteArrayList<Datapoint> metrics;
   private ConcurrentLinkedQueue<RayTracerRequest> inFlightRequests;
 
   public EC2Instance(com.amazonaws.services.ec2.model.Instance ec2Instance) {
     this.inFlightRequests = new ConcurrentLinkedQueue();
-    this.isHealthy = true;
-    this.isAvailable = true;
-    this.metrics = new LinkedList<Datapoint>();
+    this.credit = new AtomicInteger(0);
+    this.metrics = new CopyOnWriteArrayList<Datapoint>();
     this.id = ec2Instance.getInstanceId();
     this.publicDnsName = ec2Instance.getPublicDnsName();
     this.type = ec2Instance.getInstanceType();
@@ -56,35 +53,42 @@ public class EC2Instance {
     return launchTime;
   }
 
-  public boolean isHealthy() {
-    return isHealthy;
-  }
-
-  public void setAvailable(boolean availability) {
-    this.isAvailable = availability;
-  }
-
-  public void addMetric(Datapoint dp) {
-    if (metrics.size() >= RECORD_SIZE) {
-      metrics.removeLast();
-    }
-    metrics.addFirst(dp);
-  }
-
-  public Datapoint getMetric() {
-    metrics.getFirst();
+  public int getCredit() {
+    return credit.get();
   }
 
   public Datapoint getMetric(int index) {
     metrics.get(index);
   }
 
-  public boolean isAvailable() {
-    return isAvailable;
+  public int getCPU() {
+    if (metrics.size() == 0) {
+      return 0;
+    }
+    return getMetric(0).getAverage();
   }
 
   public AbstractQueue getInFlightRequests() {
     return inFlightRequests;
+  }
+
+  public void setCredit( int c ) {
+    credit.set();
+  }
+
+  public void addMetric(Datapoint dp) {
+    if (metrics.size() >= RECORD_SIZE) {
+      metric = metric.subList(0, RECORD_SIZE); 
+    }
+    metrics.add(0, dp);
+  }
+
+  public void addMetrics(Collection<Datapoint> dps) {
+    metrics.addAll(0, dps);
+
+    if (metrics.size() >= RECORD_SIZE) {
+      metrics = metrics.subList(0, RECORD_SIZE); 
+    }
   }
 
   // Start/stop the poller
@@ -205,6 +209,9 @@ public class EC2Instance {
         try{
           logger.debug("EC2 monitor running");
           runHealthCheck();
+          List<Datapoints> datapoints= AWSUtils.getCPU(this.id);
+          addMetrics(datapoints);
+          setCredit(AWSUtils.getCredit());
           Thread.sleep(SLEEP_TIME);
         } catch (InterruptedException e) {
           run = false;

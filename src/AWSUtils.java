@@ -6,43 +6,22 @@ import com.amazonaws.services.ec2.*;
 import com.amazonaws.services.ec2.model.*;
 
 import java.util.*;
+import java.lang.Integer;
 
 public class AWSUtils {
 
-  public static final String AUTOSCALING_NAME = "asg-renderfarm";
+  private static final String INSTANCE_TYPE= "t2.micro";
 
-  public static final AmazonAutoScaling autoscalingClient = AmazonAutoScalingClientBuilder.defaultClient();
-  public static final AmazonEC2 ec2Client = AmazonEC2ClientBuilder.defaultClient();
+  public static final AmazonEC2 ec2Client = AmazonEC2ClientBuilder.standard().withRegion("eu-west-1").build();
+  public static final AmazonCloudWatch cloudWatch = AmazonCloudWatchClientBuilder.standard().withRegion("eu-west-1").build();
 
   private AWSUtils () {}
 
   public static Map<String, EC2Instance> getAvailableInstances () {
 
-    // Get autoscaling group
-    DescribeAutoScalingGroupsRequest groupsRequest = new DescribeAutoScalingGroupsRequest()
-     .withAutoScalingGroupNames(AUTOSCALING_NAME);
-    List<AutoScalingGroup> groups = autoscalingClient
-     .describeAutoScalingGroups(groupsRequest)
-     .getAutoScalingGroups();
-
-    List<String> instanceIds = new ArrayList();
     Map<String, EC2Instance> availableInstances = new HashMap();
-    Map<String, com.amazonaws.services.autoscaling.model.Instance> autoscalingInstances = new HashMap();
 
-    // Iterate through instances and get those that are healthy
-    for (AutoScalingGroup group : groups) {
-      List<com.amazonaws.services.autoscaling.model.Instance> instances = group.getInstances();
-      for (com.amazonaws.services.autoscaling.model.Instance instance : instances) {
-        if (instance.getHealthStatus().equals("Healthy")) {
-          instanceIds.add(instance.getInstanceId());
-          autoscalingInstances.put(instance.getInstanceId(), instance);
-        }
-      }
-    }
-
-    // Get each all the healthy instances
-    DescribeInstancesRequest request = new DescribeInstancesRequest().withInstanceIds(instanceIds);
-    DescribeInstancesResult result = ec2Client.describeInstances(request);
+    DescribeInstancesResult result = ec2Client.describeInstances();
     List<Reservation> reservations = result.getReservations();
 
     // Get the public dns name for each running instance
@@ -57,6 +36,96 @@ public class AWSUtils {
     }
 
     return availableInstances;
+  }
+
+  public static List<Datapoints> getMetric( String instanceId , String metric ) {
+    Dimension instanceDimension = new Dimension();
+    instanceDimension.setinstanceId("InstanceId");
+    instanceDimension.setValue(instanceId);
+
+    System.out.println("running instance id = " + instanceId);
+
+    GetMetricStatisticsRequest request = new GetMetricStatisticsRequest()
+      .withStartTime(new Date(new Date().getTime() - offsetInMilliseconds))
+      .withNamespace("AWS/EC2")
+      .withPeriod(120)
+      .withMetricName("CPUUtilization")
+      .withStatistics("Average")
+      .withDimensions(instanceDimension)
+      .withEndTime(new Date());
+
+    GetMetricStatisticsResult getMetricStatisticsResult = 
+      cloudWatch.getMetricStatistics(request);
+
+    List<Datapoint> datapoints = getMetricStatisticsResult.getDatapoints();
+    if(datapoints.size() != 0) {
+      if(datapoints.size() > 1) {
+        // Sort datapoints by time
+        Collections.sort(datapoints, new Comparator<Datapoint>() {
+          @Override
+          public int compare(Datapoint o1, Datapoint o2) {
+            return o1.getTimestamp().compareTo(o2.getTimestamp());
+          }
+        });
+      }
+    }
+    return datapoints;
+  }
+
+  public static List<Datapoint> getCPU( String instanceId ) {
+    return getMetric( instanceId, "CPUUtilization");
+  }
+
+  public static int getCredit( String instanceId ) {
+    return getMetric( instanceId, "CPUCreditBalance").get(0).getAverage();
+  }
+
+  public static void scale() {
+    // FIXME
+    private static final double CPU_HIGH_THRESHOLD = 0.6;
+    private static final double CPU_LOW_THRESHOLD = 0.3;
+
+    Map<Integer, String> creditList = new TreeMap<Integer, String>();
+    if (getAvailableInstances() == 0){
+      return;
+    }
+    int numInstances;
+    int cpu;
+    for( EC2Instance instance : getAvailableInstances() ) { 
+      cpu += instance.getCPU();
+      numInstances++;
+      creditList.add(Integer.valueOf(instance.getCredit()), instance.getId());
+    }
+    int sysCpuAvg = cpu/numInstances;
+    if( sysCpuAvg >= CPU_HIGH_THRESHOLD ) {
+      startNewInstance();
+    }
+    if( sysCpuAvg <= CPU_LOW_THRESHOLD ) {
+      //choose the one with the least credits
+      creditList.get(0)
+      //send to terminating
+    }
+  }
+
+  private static void startNewInstance() throws Exception {
+    RunInstancesRequest runInstancesRequest =
+      new RunInstancesRequest();
+
+    runInstancesRequest.withImageId("ami-a58d62dc")
+      .withInstanceType(INSTANCE_TYPE)
+      .withMinCount(1)
+      .withMaxCount(1)
+      .withKeyName("aws_personal")
+      .withSecurityGroups("launch-wizard-1");
+
+    RunInstancesResult runInstancesResult =
+      ec2.runInstances(runInstancesRequest);
+  }
+
+  private static void terminateInstance( String instanceId ) throws Exception {
+    TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
+    termInstanceReq.withInstanceIds(instanceId);
+    ec2.terminateInstances(termInstanceReq);
   }
 
   public static void setHealthStatus(String instanceId, String status) {
