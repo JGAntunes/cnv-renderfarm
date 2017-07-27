@@ -138,7 +138,7 @@ public class EC2Instance {
       }
     }
     // Nothing to do but to set the instance as unealthy
-    logger.warning("Instance flagged as unhealthy");
+    logger.warning("Health check failed");
     return false;
   }
 

@@ -26,9 +26,9 @@ public class AWSUtils {
 
     // Get the public dns name for each running instance
     for (Reservation reservation : reservations) {
-      List<com.amazonaws.services.ec2.model.Instance> instances = reservation.getInstances();
+      List<Instance> instances = reservation.getInstances();
 
-      for (com.amazonaws.services.ec2.model.Instance instance : instances) {
+      for (Instance instance : instances) {
         if (instance.getState().getName().equals("running")) {
           availableInstances.put(instance.getInstanceId(), new EC2Instance(instance));
         }
@@ -82,7 +82,8 @@ public class AWSUtils {
     return (int) Math.round(datapoints.get(0).getAverage());
   }
 
-  private static void startNewInstance() throws Exception {
+  public static EC2Instance startNewInstance() throws Exception {
+    EC2Instance newInstance = null;
     RunInstancesRequest runInstancesRequest =
       new RunInstancesRequest();
 
@@ -93,8 +94,11 @@ public class AWSUtils {
       .withKeyName("aws_personal")
       .withSecurityGroups("launch-wizard-1");
 
-    RunInstancesResult runInstancesResult =
-      ec2Client.runInstances(runInstancesRequest);
+    RunInstancesResult runInstancesResult = ec2Client.runInstances(runInstancesRequest);
+    for (Instance instance : runInstancesResult.getReservation().getInstances()) {
+      newInstance = new EC2Instance(instance);
+    }
+    return newInstance;
   }
 
   private static void terminateInstance( String instanceId ) throws Exception {
