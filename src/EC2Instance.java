@@ -5,6 +5,7 @@ import java.net.HttpURLConnection;
 import java.util.Date;
 import java.util.Collection;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.amazonaws.services.ec2.model.*;
 import com.amazonaws.services.autoscaling.model.*;
@@ -57,37 +58,41 @@ public class EC2Instance {
   }
 
   public Datapoint getMetric(int index) {
-    metrics.get(index);
+    return metrics.get(index);
   }
 
-  public int getCPU() {
+  public double getCPU() {
     if (metrics.size() == 0) {
       return 0;
     }
     return getMetric(0).getAverage();
   }
 
-  public AbstractQueue getInFlightRequests() {
+  public Collection getInFlightRequests() {
     return inFlightRequests;
   }
 
-  public void setCredit( int c ) {
-    credit.set();
+  public void setCredit(int c) {
+    credit.set(c);
+    logger.debug("Updated credits info: " + getCredit());
+  }
+
+  // We only need the latest 30 values
+  private void cropMetrics() {
+    if (metrics.size() >= RECORD_SIZE) {
+      metrics = new CopyOnWriteArrayList<Datapoint>(metrics.subList(0, RECORD_SIZE));
+    }
   }
 
   public void addMetric(Datapoint dp) {
-    if (metrics.size() >= RECORD_SIZE) {
-      metric = metric.subList(0, RECORD_SIZE);
-    }
+    cropMetrics();
     metrics.add(0, dp);
   }
 
   public void addMetrics(Collection<Datapoint> dps) {
     metrics.addAll(0, dps);
-
-    if (metrics.size() >= RECORD_SIZE) {
-      metrics = metrics.subList(0, RECORD_SIZE);
-    }
+    cropMetrics();
+    logger.debug("Updated CPU metrics: " + getCPU() + " average");
   }
 
   public RayTracerResponse processRequest(RayTracerRequest request) throws IOException {
@@ -101,7 +106,7 @@ public class EC2Instance {
     // Make the request
     requestLogger.debug("Sending request: " + url);
     Timer workerTimer = new Timer();
-    HttpURLConnection conn = WebUtils.request("GET", url, 5000);
+    HttpURLConnection conn = WebUtils.request("GET", url, 10000);
 
     RayTracerResponse response = new RayTracerResponse(conn);
     long finishTime = workerTimer.getTime();
@@ -129,11 +134,11 @@ public class EC2Instance {
           return false;
         }
       } catch (Exception e) {
-        logger.warning("Healthcheck endpoint inaccessible - " + e.getMessage() + " - retry" + currentRetries);
+        logger.warning("Healthcheck endpoint inaccessible - " + e.getMessage() + " - retry " + currentRetries);
       }
     }
     // Nothing to do but to set the instance as unealthy
-    logger.warning("Instance flagged as unhealthy");
+    logger.warning("Health check failed");
     return false;
   }
 
