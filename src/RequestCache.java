@@ -15,7 +15,14 @@ public class RequestCache {
   }
 
   public CachedValue get(RayTracerRequest request) {
-    return this.map.ceilingEntry(calculateKey(request)).getValue();
+    if (this.map.size() == 0) {
+      return null;
+    }
+    Map.Entry<Integer, CachedValue> closer = this.map.ceilingEntry(calculateKey(request));
+    if (closer == null){ 
+      closer = this.map.floorEntry(calculateKey(request));
+    } 
+    return closer.getValue();
   }
 
   public void put(RayTracerRequest request, int time) {

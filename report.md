@@ -23,6 +23,9 @@ beforehand, otherwise we risk reaching a congested system state.
 In the case of the average being bellow 0.3 (30%) CPU utilization the instance with 
 the least amount of CPUBalance is flagged for removal, preventing new requests from
 being scheduled and terminating it when the current ones are over.
+One flaw of the scheduler resides in the fact that it was built to add and remove
+one instance at a time. Because of this it won't be able to react quicly enough in
+big systems.
 
 **Data-Structures**
 In order to keep track of the state of the machines four pools were created.
