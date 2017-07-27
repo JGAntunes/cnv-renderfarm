@@ -68,7 +68,7 @@ public class EC2Instance {
     return getMetric(0).getAverage();
   }
 
-  public Collection getInFlightRequests() {
+  public Collection<RayTracerRequest> getInFlightRequests() {
     return inFlightRequests;
   }
 

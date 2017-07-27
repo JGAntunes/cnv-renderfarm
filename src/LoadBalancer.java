@@ -15,7 +15,11 @@ public class LoadBalancer {
 
   private static final Integer PORT = 80;
   private static final Logger logger = new Logger("load-balancer");
-  private static final Scheduler scheduler = new Scheduler(new RoundRobinStrategy());
+  // A scheduler with a default cache based strategy and a fallback for estimate based
+  private static final Scheduler scheduler = new Scheduler(Arrays.asList(
+    new CacheBasedStrategy(),
+    new EstimateBasedStrategy()
+  ));
 
   public static void main(String[] args) throws Exception {
     // Let's bind to all the supported ipv4 interfaces

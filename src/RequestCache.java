@@ -5,49 +5,36 @@ import java.util.concurrent.*;
 
 public class RequestCache {
 
-  ConcurrentNavigableMap<Integer, CachedValue> map;
+  WeakHashMap<Integer, CachedValue> map;
 
   public RequestCache() {
-    this.map = new ConcurrentSkipListMap();
+    this.map = new WeakHashMap();
   }
 
-  public int size() {
+  public synchronized int size() {
     return map.size();
   }
 
-  public Integer get(RayTracerRequest request) {
-    if (this.map.size() == 0) {
-      return null;
-    }
-    Map.Entry<Integer, CachedValue> closer = this.map.ceilingEntry(calculateKey(request));
-    if (closer == null){
-      closer = this.map.floorEntry(calculateKey(request));
-    }
-    return closer.getValue().getTime();
+  public synchronized CachedValue get(RayTracerRequest request) {
+    return map.get(calculateKey(request));
   }
 
-  public void put(RayTracerRequest request, int time) {
-    int key = calculateKey(request);
-    CachedValue cachedValue = this.map.get(key);
-    // Don't throw away already cached time
-    if(cachedValue != null) {
-      time = cachedValue.time / 2;
-    }
-    this.map.put(key, new CachedValue(time));
+  public synchronized void put(RayTracerRequest request) {
+    this.map.put(calculateKey(request), new CachedValue(request.getRealTime()));
   }
 
   private int calculateKey(RayTracerRequest request) {
     return request.getWindowRows() * request.getWindowColumns();
   }
 
-  private class CachedValue {
-    private int time;
+  public class CachedValue {
+    private long time;
 
-    public CachedValue(int time) {
+    public CachedValue(long time) {
       this.time = time;
     }
 
-    public int getTime() {
+    public long getTime() {
       return time;
     }
   }

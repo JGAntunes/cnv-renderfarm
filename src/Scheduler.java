@@ -13,29 +13,42 @@ public class Scheduler {
   private EC2Pool ec2Pool;
   private ConcurrentHashMap<String, EC2Instance> availableInstances;
   private Thread pollingThread;
-  private ScheduleStrategy strategy;
+  private List<ScheduleStrategy> strategies;
 
-  public Scheduler(ScheduleStrategy strategy) {
+  public Scheduler(List<ScheduleStrategy> strategies) {
     this.requestCache = new RequestCache();
     this.ec2Pool = new EC2Pool(AWSUtils.getAvailableInstances());
     this.availableInstances = new ConcurrentHashMap<String, EC2Instance>();
-    this.strategy = strategy;
+    this.strategies = strategies;
   }
 
-  // FIXME IOException needs to be handled here or on the EC2Instance
   public RayTracerResponse schedule(RayTracerRequest request) throws NoAvailableInstancesException {
     // Try to schedule
-    EC2Instance instance;
+    EC2Instance instance = null;
     for (int i = 0; i < MAX_RETRIES; i++) {
       try {
-        instance = strategy.execute(request, new ArrayList(ec2Pool.getAvailableInstances()), requestCache);
-      } catch (NoAvailableInstancesException e) {
+        // Iterate through the available strategies by order until one works
+        for(ScheduleStrategy strategy : this.strategies) {
+          try {
+            instance = strategy.execute(request, new ArrayList(ec2Pool.getAvailableInstances()), requestCache);
+            // Success, let's get out
+            break;
+          } catch (IllegalStateException e) {
+            continue;
+          }
+        }
+      }
+      // Don't give up, retry
+      catch (NoAvailableInstancesException e) {
         logger.warning("Unable to process request " + request.getId() + " " + e.getMessage());
         logger.warning("Retry " + i);
         continue;
       }
       try {
-        return instance.processRequest(request);
+        RayTracerResponse response = instance.processRequest(request);
+        // Set value in cache
+        requestCache.put(request);
+        return response;
       } catch (IOException e) {
         logger.warning(String.format("Got error scheduling request %s - instance %s - %s",
           request.getId(), instance.getId(), e.getMessage()));

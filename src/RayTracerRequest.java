@@ -30,7 +30,8 @@ public class RayTracerRequest {
 
   public RayTracerRequest(HttpExchange req) {
     Map<String,String> params = WebUtils.getQueryParameters(req);
-    this.expectedTime = this.realTime = -1;
+
+    this.realTime = -1;
     this.id = UUID.randomUUID().toString();
     this.path = req.getRequestURI().toString();
     this.scols = Integer.parseInt(params.get(SCENE_COLUMNS_PARAM));
@@ -40,6 +41,14 @@ public class RayTracerRequest {
     this.coff = Integer.parseInt(params.get(COLUMNS_OFFSET_PARAM));
     this.roff = - Integer.parseInt(params.get(ROWS_OFFSET_PARAM));
     this.fileName = params.get(MODEL_FILENAME_PARAM);
+
+
+    this.expectedTime = calculateExpectedTime(this);
+  }
+
+  public static long calculateExpectedTime(RayTracerRequest request) {
+    // An approximation we estimated, * 1000 for milis
+    return (long) (request.getWindowColumns() * request.getWindowRows() * 0.000008) * 1000;
   }
 
   public String getId() {
