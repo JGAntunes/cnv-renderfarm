@@ -1,7 +1,7 @@
 package renderfarm;
 
-import com.amazonaws.services.autoscaling.*;
-import com.amazonaws.services.autoscaling.model.*;
+import com.amazonaws.services.cloudwatch.*;
+import com.amazonaws.services.cloudwatch.model.*;
 import com.amazonaws.services.ec2.*;
 import com.amazonaws.services.ec2.model.*;
 
@@ -38,73 +38,48 @@ public class AWSUtils {
     return availableInstances;
   }
 
-  public static List<Datapoints> getMetric( String instanceId , String metric ) {
+  public static List<Datapoint> getMetric(String instanceId , String metric) {
     Dimension instanceDimension = new Dimension();
-    instanceDimension.setinstanceId("InstanceId");
+    instanceDimension.setName("InstanceId");
     instanceDimension.setValue(instanceId);
 
-    System.out.println("running instance id = " + instanceId);
-
+    // Minimum offset possible
+    int offsetInMilliseconds = 10 * 60 * 1000;
     GetMetricStatisticsRequest request = new GetMetricStatisticsRequest()
       .withStartTime(new Date(new Date().getTime() - offsetInMilliseconds))
       .withNamespace("AWS/EC2")
-      .withPeriod(120)
-      .withMetricName("CPUUtilization")
+      .withPeriod(60)
+      .withMetricName(metric)
       .withStatistics("Average")
       .withDimensions(instanceDimension)
       .withEndTime(new Date());
 
-    GetMetricStatisticsResult getMetricStatisticsResult = 
+    GetMetricStatisticsResult getMetricStatisticsResult =
       cloudWatch.getMetricStatistics(request);
 
     List<Datapoint> datapoints = getMetricStatisticsResult.getDatapoints();
-    if(datapoints.size() != 0) {
-      if(datapoints.size() > 1) {
-        // Sort datapoints by time
-        Collections.sort(datapoints, new Comparator<Datapoint>() {
-          @Override
-          public int compare(Datapoint o1, Datapoint o2) {
-            return o1.getTimestamp().compareTo(o2.getTimestamp());
-          }
-        });
-      }
+    if(datapoints.size() > 1) {
+      // Sort datapoints by time
+      Collections.sort(datapoints, new Comparator<Datapoint>() {
+        @Override
+        public int compare(Datapoint o1, Datapoint o2) {
+          return o1.getTimestamp().compareTo(o2.getTimestamp());
+        }
+      });
     }
     return datapoints;
   }
 
   public static List<Datapoint> getCPU( String instanceId ) {
-    return getMetric( instanceId, "CPUUtilization");
+    return getMetric(instanceId, "CPUUtilization");
   }
 
-  public static int getCredit( String instanceId ) {
-    return getMetric( instanceId, "CPUCreditBalance").get(0).getAverage();
-  }
-
-  public static void scale() {
-    // FIXME
-    private static final double CPU_HIGH_THRESHOLD = 0.6;
-    private static final double CPU_LOW_THRESHOLD = 0.3;
-
-    Map<Integer, String> creditList = new TreeMap<Integer, String>();
-    if (getAvailableInstances() == 0){
-      return;
+  public static int getCredit(String instanceId) {
+    List<Datapoint> datapoints = getMetric(instanceId, "CPUCreditBalance");
+    if (datapoints.size() == 0) {
+      return 0;
     }
-    int numInstances;
-    int cpu;
-    for( EC2Instance instance : getAvailableInstances() ) { 
-      cpu += instance.getCPU();
-      numInstances++;
-      creditList.add(Integer.valueOf(instance.getCredit()), instance.getId());
-    }
-    int sysCpuAvg = cpu/numInstances;
-    if( sysCpuAvg >= CPU_HIGH_THRESHOLD ) {
-      startNewInstance();
-    }
-    if( sysCpuAvg <= CPU_LOW_THRESHOLD ) {
-      //choose the one with the least credits
-      creditList.get(0)
-      //send to terminating
-    }
+    return (int) Math.round(datapoints.get(0).getAverage());
   }
 
   private static void startNewInstance() throws Exception {
@@ -119,20 +94,13 @@ public class AWSUtils {
       .withSecurityGroups("launch-wizard-1");
 
     RunInstancesResult runInstancesResult =
-      ec2.runInstances(runInstancesRequest);
+      ec2Client.runInstances(runInstancesRequest);
   }
 
   private static void terminateInstance( String instanceId ) throws Exception {
     TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
     termInstanceReq.withInstanceIds(instanceId);
-    ec2.terminateInstances(termInstanceReq);
-  }
-
-  public static void setHealthStatus(String instanceId, String status) {
-    SetInstanceHealthRequest request = new SetInstanceHealthRequest()
-      .withHealthStatus(status)
-      .withInstanceId(instanceId);
-    SetInstanceHealthResult response = autoscalingClient.setInstanceHealth(request);
+    ec2Client.terminateInstances(termInstanceReq);
   }
 
   // DEBUG

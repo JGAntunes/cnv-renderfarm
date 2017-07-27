@@ -56,6 +56,36 @@ public class EC2Pool {
     this.workers.get(instanceId).flagInstance();
   }
 
+  private class AutoScaler implements Runnable {
+    private static final int SLEEP_TIME = 10000;
+    private static final double CPU_HIGH_THRESHOLD = 60;
+    private static final double CPU_LOW_THRESHOLD = 30;
+
+    @Override
+    public void run() {
+      Map<Integer, String> creditList = new TreeMap<Integer, String>();
+      int numInstances = 0;
+      int cpu = 0;
+      if (getAvailableInstances().size() == 0){
+        return;
+      }
+      for( EC2Instance instance : getAvailableInstances() ) {
+        cpu += instance.getCPU();
+        numInstances++;
+        creditList.put(Integer.valueOf(instance.getCredit()), instance.getId());
+      }
+      int sysCpuAvg = cpu/numInstances;
+      if( sysCpuAvg >= CPU_HIGH_THRESHOLD ) {
+        // startNewInstance();
+      }
+      if( sysCpuAvg <= CPU_LOW_THRESHOLD ) {
+        //choose the one with the least credits
+        creditList.get(0);
+        //send to terminating
+      }
+    }
+  }
+
   private class EC2Poller implements Runnable {
     private static final int SLEEP_TIME = 10000;
 
@@ -113,7 +143,6 @@ public class EC2Pool {
       this.run.set(true);
       while(run.get()) {
         try{
-          Thread.sleep(SLEEP_TIME);
           logger.debug("EC2 monitor running");
 
           // Update pool status
@@ -138,8 +167,9 @@ public class EC2Pool {
           healthCheck(currentStatus);
 
           // Update metrics
-          this.instance.addMetrics(AWSUtils.getCPU(this.id));
-          this.instance.setCredit(AWSUtils.getCredit());
+          this.instance.addMetrics(AWSUtils.getCPU(instance.getId()));
+          this.instance.setCredit(AWSUtils.getCredit(instance.getId()));
+          Thread.sleep(SLEEP_TIME);
         } catch (InterruptedException e) {
           run.set(false);
         }
