@@ -3,7 +3,7 @@ package renderfarm;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.Date;
-import java.util.AbstractQueue;
+import java.util.Collection;
 import java.util.concurrent.*;
 
 import com.amazonaws.services.ec2.model.*;
@@ -74,7 +74,7 @@ public class EC2Instance {
     return response;
   }
 
-  private boolean runHealthCheck () {
+  public boolean runHealthCheck () {
     String url = "http://" + this.publicDnsName + WebUtils.HEALTHCHECK_PATH;
     int currentRetries = 0;
     for(int i = 0; i < MAX_RETRIES; i++) {
@@ -88,7 +88,6 @@ public class EC2Instance {
           logger.warning("Instance flagged as unhealthy");
           return false;
         }
-        return;
       } catch (Exception e) {
         logger.warning("Healthcheck endpoint inaccessible - " + e.getMessage() + " - retry" + currentRetries);
       }
