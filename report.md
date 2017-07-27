@@ -1,9 +1,9 @@
 CNV Report
 ===
 
-Made with love by,
-  Joao Antunes
-  Joao Tiago
+Made with love by,  
+  Joao Antunes  
+  Joao Tiago  
 
 **Request Cost Estimation**  
 To estimate the cost of the request we first search a cache for a request 
